@@ -78,7 +78,6 @@ final class SerializeStage implements SerializeStageInterface
                 $data = $this->normalizer->normalize($itemOrCollection, ItemNormalizer::FORMAT, $normalizationContext);
             }
         }
-
         if ($isCollection && is_iterable($itemOrCollection)) {
             if (!$this->pagination->isGraphQlEnabled($operation, $context)) {
                 $data = [];
@@ -175,14 +174,21 @@ final class SerializeStage implements SerializeStageInterface
      */
     private function serializePageBasedPaginatedCollection(iterable $collection, array $normalizationContext): array
     {
-        if (!($collection instanceof PaginatorInterface)) {
-            throw new \LogicException(sprintf('Collection returned by the collection data provider must implement %s.', PaginatorInterface::class));
+        if (!($collection instanceof PartialPaginatorInterface)) {
+            throw new \LogicException(sprintf('Collection returned by the collection data provider must implement %s or %s.', PaginatorInterface::class, PartialPaginatorInterface::class));
         }
 
-        $data = $this->getDefaultPageBasedPaginatedData();
-        $data['paginationInfo']['totalCount'] = $collection->getTotalItems();
-        $data['paginationInfo']['lastPage'] = $collection->getLastPage();
-        $data['paginationInfo']['itemsPerPage'] = $collection->getItemsPerPage();
+        $data = [
+            'collection' => [],
+            'paginationInfo' => [
+                'itemsPerPage' => $collection->getItemsPerPage(),
+            ],
+        ];
+
+        if ($collection instanceof PaginatorInterface) {
+            $data['paginationInfo']['totalCount'] = $collection->getTotalItems();
+            $data['paginationInfo']['lastPage'] = $collection->getLastPage();
+        }
 
         foreach ($collection as $object) {
             $data['collection'][] = $this->normalizer->normalize($object, ItemNormalizer::FORMAT, $normalizationContext);

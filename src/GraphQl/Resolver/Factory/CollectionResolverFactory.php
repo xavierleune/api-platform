@@ -41,6 +41,10 @@ final class CollectionResolverFactory implements ResolverFactoryInterface
     public function __invoke(string $resourceClass = null, string $rootClass = null, Operation $operation = null): callable
     {
         return function (?array $source, array $args, $context, ResolveInfo $info) use ($resourceClass, $rootClass, $operation): ?array {
+            if (!isset($info->getFieldSelection()['paginationInfo']) && $operation->getPaginationClientPartial()) {
+                $operation = $operation->withPaginationPartial(true);
+            }
+
             // If authorization has failed for a relation field (e.g. via ApiProperty security), the field is not present in the source: null can be returned directly to ensure the collection isn't in the response.
             if (null === $resourceClass || null === $rootClass || (null !== $source && !\array_key_exists($info->fieldName, $source))) {
                 return null;
@@ -49,6 +53,7 @@ final class CollectionResolverFactory implements ResolverFactoryInterface
             $resolverContext = ['source' => $source, 'args' => $args, 'info' => $info, 'is_collection' => true, 'is_mutation' => false, 'is_subscription' => false];
 
             $collection = ($this->readStage)($resourceClass, $rootClass, $operation, $resolverContext);
+
             if (!is_iterable($collection)) {
                 throw new \LogicException('Collection from read stage should be iterable.');
             }

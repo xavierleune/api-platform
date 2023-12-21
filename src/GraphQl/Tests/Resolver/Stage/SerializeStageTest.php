@@ -124,7 +124,7 @@ class SerializeStageTest extends TestCase
     /**
      * @dataProvider applyCollectionWithPaginationProvider
      */
-    public function testApplyCollectionWithPagination(iterable|callable $collection, array $args, ?array $expectedResult, string $expectedExceptionClass = null, string $expectedExceptionMessage = null): void
+    public function testApplyCollectionWithPagination(iterable|callable $collection, array $args, ?array $expectedResult, bool $pageBasedPagination, string $expectedExceptionClass = null, string $expectedExceptionMessage = null): void
     {
         $operationName = 'collection_query';
         $resourceClass = 'myResource';
@@ -138,6 +138,9 @@ class SerializeStageTest extends TestCase
 
         /** @var Operation $operation */
         $operation = (new QueryCollection())->withShortName('shortName')->withName($operationName);
+        if ($pageBasedPagination) {
+            $operation = $operation->withPaginationType('page');
+        }
 
         $normalizationContext = ['normalization' => true];
         $this->serializerContextBuilderProphecy->create($resourceClass, $operation, $context, true)->shouldBeCalled()->willReturn($normalizationContext);
@@ -160,23 +163,31 @@ class SerializeStageTest extends TestCase
             $partialPaginatorProphecy = $that->prophesize(PartialPaginatorInterface::class);
             $partialPaginatorProphecy->count()->willReturn(2);
             $partialPaginatorProphecy->valid()->willReturn(false);
+            $partialPaginatorProphecy->getItemsPerPage()->willReturn(2.0);
             $partialPaginatorProphecy->rewind();
 
             return $partialPaginatorProphecy->reveal();
         };
 
-        yield 'not paginator' => [[], [], null, \LogicException::class, 'Collection returned by the collection data provider must implement ApiPlatform\State\Pagination\PaginatorInterface'];
-        yield 'empty paginator' => [new ArrayPaginator([], 0, 0), [], ['totalCount' => 0., 'edges' => [], 'pageInfo' => ['startCursor' => null, 'endCursor' => null, 'hasNextPage' => false, 'hasPreviousPage' => false]]];
-        yield 'paginator' => [new ArrayPaginator([new \stdClass(), new \stdClass(), new \stdClass()], 0, 2), [], ['totalCount' => 3., 'edges' => [['node' => ['normalized_item'], 'cursor' => 'MA=='], ['node' => ['normalized_item'], 'cursor' => 'MQ==']], 'pageInfo' => ['startCursor' => 'MA==', 'endCursor' => 'MQ==', 'hasNextPage' => true, 'hasPreviousPage' => false]]];
-        yield 'paginator with after cursor' => [new ArrayPaginator([new \stdClass(), new \stdClass(), new \stdClass()], 1, 2), ['after' => 'MA=='], ['totalCount' => 3., 'edges' => [['node' => ['normalized_item'], 'cursor' => 'MQ=='], ['node' => ['normalized_item'], 'cursor' => 'Mg==']], 'pageInfo' => ['startCursor' => 'MQ==', 'endCursor' => 'Mg==', 'hasNextPage' => false, 'hasPreviousPage' => true]]];
-        yield 'paginator with bad after cursor' => [new ArrayPaginator([], 0, 0), ['after' => '-'], null, \UnexpectedValueException::class, 'Cursor - is invalid'];
-        yield 'paginator with empty after cursor' => [new ArrayPaginator([], 0, 0), ['after' => ''], null, \UnexpectedValueException::class, 'Empty cursor is invalid'];
-        yield 'paginator with before cursor' => [new ArrayPaginator([new \stdClass(), new \stdClass(), new \stdClass()], 1, 1), ['before' => 'Mg=='], ['totalCount' => 3., 'edges' => [['node' => ['normalized_item'], 'cursor' => 'MQ==']], 'pageInfo' => ['startCursor' => 'MQ==', 'endCursor' => 'MQ==', 'hasNextPage' => true, 'hasPreviousPage' => true]]];
-        yield 'paginator with bad before cursor' => [new ArrayPaginator([], 0, 0), ['before' => '-'], null, \UnexpectedValueException::class, 'Cursor - is invalid'];
-        yield 'paginator with empty before cursor' => [new ArrayPaginator([], 0, 0), ['before' => ''], null, \UnexpectedValueException::class, 'Empty cursor is invalid'];
-        yield 'paginator with last' => [new ArrayPaginator([new \stdClass(), new \stdClass(), new \stdClass()], 1, 2), ['last' => 2], ['totalCount' => 3., 'edges' => [['node' => ['normalized_item'], 'cursor' => 'MQ=='], ['node' => ['normalized_item'], 'cursor' => 'Mg==']], 'pageInfo' => ['startCursor' => 'MQ==', 'endCursor' => 'Mg==', 'hasNextPage' => false, 'hasPreviousPage' => true]]];
-        yield 'partial paginator' => [$partialPaginatorFactory, [], ['totalCount' => 0., 'edges' => [], 'pageInfo' => ['startCursor' => 'MA==', 'endCursor' => 'MQ==', 'hasNextPage' => false, 'hasPreviousPage' => false]]];
-        yield 'partial paginator with after cursor' => [$partialPaginatorFactory, ['after' => 'MA=='], ['totalCount' => 0., 'edges' => [], 'pageInfo' => ['startCursor' => 'MQ==', 'endCursor' => 'Mg==', 'hasNextPage' => false, 'hasPreviousPage' => true]]];
+        yield 'cursor - not paginator' => [[], [], null, false, \LogicException::class, 'Collection returned by the collection data provider must implement ApiPlatform\State\Pagination\PaginatorInterface or ApiPlatform\State\Pagination\PartialPaginatorInterface.'];
+        yield 'cursor - empty paginator' => [new ArrayPaginator([], 0, 0), [], ['totalCount' => 0., 'edges' => [], 'pageInfo' => ['startCursor' => null, 'endCursor' => null, 'hasNextPage' => false, 'hasPreviousPage' => false]], false];
+        yield 'cursor - paginator' => [new ArrayPaginator([new \stdClass(), new \stdClass(), new \stdClass()], 0, 2), [], ['totalCount' => 3., 'edges' => [['node' => ['normalized_item'], 'cursor' => 'MA=='], ['node' => ['normalized_item'], 'cursor' => 'MQ==']], 'pageInfo' => ['startCursor' => 'MA==', 'endCursor' => 'MQ==', 'hasNextPage' => true, 'hasPreviousPage' => false]], false];
+        yield 'cursor - paginator with after cursor' => [new ArrayPaginator([new \stdClass(), new \stdClass(), new \stdClass()], 1, 2), ['after' => 'MA=='], ['totalCount' => 3., 'edges' => [['node' => ['normalized_item'], 'cursor' => 'MQ=='], ['node' => ['normalized_item'], 'cursor' => 'Mg==']], 'pageInfo' => ['startCursor' => 'MQ==', 'endCursor' => 'Mg==', 'hasNextPage' => false, 'hasPreviousPage' => true]], false];
+        yield 'cursor - paginator with bad after cursor' => [new ArrayPaginator([], 0, 0), ['after' => '-'], null, false, \UnexpectedValueException::class, 'Cursor - is invalid'];
+        yield 'cursor - paginator with empty after cursor' => [new ArrayPaginator([], 0, 0), ['after' => ''], null, false, \UnexpectedValueException::class, 'Empty cursor is invalid'];
+        yield 'cursor - paginator with before cursor' => [new ArrayPaginator([new \stdClass(), new \stdClass(), new \stdClass()], 1, 1), ['before' => 'Mg=='], ['totalCount' => 3., 'edges' => [['node' => ['normalized_item'], 'cursor' => 'MQ==']], 'pageInfo' => ['startCursor' => 'MQ==', 'endCursor' => 'MQ==', 'hasNextPage' => true, 'hasPreviousPage' => true]], false];
+        yield 'cursor - paginator with bad before cursor' => [new ArrayPaginator([], 0, 0), ['before' => '-'], null, false, \UnexpectedValueException::class, 'Cursor - is invalid'];
+        yield 'cursor - paginator with empty before cursor' => [new ArrayPaginator([], 0, 0), ['before' => ''], null, false, \UnexpectedValueException::class, 'Empty cursor is invalid'];
+        yield 'cursor - paginator with last' => [new ArrayPaginator([new \stdClass(), new \stdClass(), new \stdClass()], 1, 2), ['last' => 2], ['totalCount' => 3., 'edges' => [['node' => ['normalized_item'], 'cursor' => 'MQ=='], ['node' => ['normalized_item'], 'cursor' => 'Mg==']], 'pageInfo' => ['startCursor' => 'MQ==', 'endCursor' => 'Mg==', 'hasNextPage' => false, 'hasPreviousPage' => true]], false];
+        yield 'cursor - partial paginator' => [$partialPaginatorFactory, [], ['totalCount' => 0., 'edges' => [], 'pageInfo' => ['startCursor' => 'MA==', 'endCursor' => 'MQ==', 'hasNextPage' => false, 'hasPreviousPage' => false]], false];
+        yield 'cursor - partial paginator with after cursor' => [$partialPaginatorFactory, ['after' => 'MA=='], ['totalCount' => 0., 'edges' => [], 'pageInfo' => ['startCursor' => 'MQ==', 'endCursor' => 'Mg==', 'hasNextPage' => false, 'hasPreviousPage' => true]], false];
+
+        yield 'page - not paginator' => [[], [], null, true, \LogicException::class, 'Collection returned by the collection data provider must implement ApiPlatform\State\Pagination\PaginatorInterface or ApiPlatform\State\Pagination\PartialPaginatorInterface.'];
+        yield 'page - empty paginator' => [new ArrayPaginator([], 0, 0), [], ['collection' => [], 'paginationInfo' => ['itemsPerPage' => .0, 'totalCount' => .0, 'lastPage' => 1.0]], true];
+        yield 'page - paginator' => [new ArrayPaginator([new \stdClass(), new \stdClass(), new \stdClass()], 0, 2), [], ['collection' => [['normalized_item'], ['normalized_item']], 'paginationInfo' => ['itemsPerPage' => 2.0, 'totalCount' => 3.0, 'lastPage' => 2.0]], true];
+        yield 'page - paginator with page' => [new ArrayPaginator([new \stdClass(), new \stdClass(), new \stdClass()], 2, 2), [], ['collection' => [['normalized_item']], 'paginationInfo' => ['itemsPerPage' => 2.0, 'totalCount' => 3.0, 'lastPage' => 2.0]], true];
+        yield 'page - partial paginator' => [$partialPaginatorFactory, [], ['collection' => [], 'paginationInfo' => ['itemsPerPage' => 2.0]], true];
+        yield 'page - partial paginator with page' => [$partialPaginatorFactory, [], ['collection' => [], 'paginationInfo' => ['itemsPerPage' => 2.0]], true];
     }
 
     public function testApplyBadNormalizedData(): void

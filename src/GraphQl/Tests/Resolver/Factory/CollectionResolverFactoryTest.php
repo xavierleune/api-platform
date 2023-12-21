@@ -21,6 +21,7 @@ use ApiPlatform\GraphQl\Resolver\Stage\SerializeStageInterface;
 use ApiPlatform\Metadata\GraphQl\QueryCollection;
 use GraphQL\Type\Definition\ResolveInfo;
 use PHPUnit\Framework\TestCase;
+use Prophecy\Argument;
 use Prophecy\PhpUnit\ProphecyTrait;
 use Prophecy\Prophecy\ObjectProphecy;
 use Psr\Container\ContainerInterface;
@@ -68,7 +69,9 @@ class CollectionResolverFactoryTest extends TestCase
         $operation = (new QueryCollection())->withName($operationName);
         $source = ['testField' => 0];
         $args = ['args'];
-        $info = $this->prophesize(ResolveInfo::class)->reveal();
+        $infoProphecy = $this->prophesize(ResolveInfo::class);
+        $infoProphecy->getFieldSelection()->willReturn(['testField' => true]);
+        $info = $infoProphecy->reveal();
         $info->fieldName = 'testField';
         $resolverContext = ['source' => $source, 'args' => $args, 'info' => $info, 'is_collection' => true, 'is_mutation' => false, 'is_subscription' => false];
 
@@ -101,7 +104,9 @@ class CollectionResolverFactoryTest extends TestCase
         $operation = (new QueryCollection())->withName($operationName);
         $source = ['source'];
         $args = ['args'];
-        $info = $this->prophesize(ResolveInfo::class)->reveal();
+        $infoProphecy = $this->prophesize(ResolveInfo::class);
+        $infoProphecy->getFieldSelection()->willReturn(['testField' => true]);
+        $info = $infoProphecy->reveal();
         $info->fieldName = 'testField';
         $resolverContext = ['source' => $source, 'args' => $args, 'info' => $info, 'is_collection' => true, 'is_mutation' => false, 'is_subscription' => false];
 
@@ -132,7 +137,9 @@ class CollectionResolverFactoryTest extends TestCase
         $operation = (new QueryCollection())->withName($operationName);
         $source = null;
         $args = ['args'];
-        $info = $this->prophesize(ResolveInfo::class)->reveal();
+        $infoProphecy = $this->prophesize(ResolveInfo::class);
+        $infoProphecy->getFieldSelection()->willReturn([]);
+        $info = $infoProphecy->reveal();
         $resolverContext = ['source' => $source, 'args' => $args, 'info' => $info, 'is_collection' => true, 'is_mutation' => false, 'is_subscription' => false];
 
         $readStageCollection = [new \stdClass()];
@@ -164,7 +171,9 @@ class CollectionResolverFactoryTest extends TestCase
         $operation = (new QueryCollection())->withName($operationName);
         $source = ['source'];
         $args = ['args'];
-        $info = $this->prophesize(ResolveInfo::class)->reveal();
+        $infoProphecy = $this->prophesize(ResolveInfo::class);
+        $infoProphecy->getFieldSelection()->willReturn([]);
+        $info = $infoProphecy->reveal();
 
         $this->assertNull(($this->collectionResolverFactory)($resourceClass, $rootClass, $operation)($source, $args, null, $info));
     }
@@ -177,7 +186,9 @@ class CollectionResolverFactoryTest extends TestCase
         $operation = (new QueryCollection())->withName($operationName);
         $source = ['source'];
         $args = ['args'];
-        $info = $this->prophesize(ResolveInfo::class)->reveal();
+        $infoProphecy = $this->prophesize(ResolveInfo::class);
+        $infoProphecy->getFieldSelection()->willReturn([]);
+        $info = $infoProphecy->reveal();
 
         $this->assertNull(($this->collectionResolverFactory)($resourceClass, $rootClass, $operation)($source, $args, null, $info));
     }
@@ -190,7 +201,9 @@ class CollectionResolverFactoryTest extends TestCase
         $operation = (new QueryCollection())->withName($operationName);
         $source = null;
         $args = ['args'];
-        $info = $this->prophesize(ResolveInfo::class)->reveal();
+        $infoProphecy = $this->prophesize(ResolveInfo::class);
+        $infoProphecy->getFieldSelection()->willReturn([]);
+        $info = $infoProphecy->reveal();
         $resolverContext = ['source' => $source, 'args' => $args, 'info' => $info, 'is_collection' => true, 'is_mutation' => false, 'is_subscription' => false];
 
         $readStageCollection = new \stdClass();
@@ -210,7 +223,9 @@ class CollectionResolverFactoryTest extends TestCase
         $operation = (new QueryCollection())->withResolver('query_resolver_id')->withName($operationName);
         $source = null;
         $args = ['args'];
-        $info = $this->prophesize(ResolveInfo::class)->reveal();
+        $infoProphecy = $this->prophesize(ResolveInfo::class);
+        $infoProphecy->getFieldSelection()->willReturn([]);
+        $info = $infoProphecy->reveal();
         $resolverContext = ['source' => $source, 'args' => $args, 'info' => $info, 'is_collection' => true, 'is_mutation' => false, 'is_subscription' => false];
 
         $readStageCollection = [new \stdClass()];
@@ -236,5 +251,45 @@ class CollectionResolverFactoryTest extends TestCase
         $this->serializeStageProphecy->__invoke($customCollection, $resourceClass, $operation, $resolverContext)->shouldBeCalled()->willReturn($serializeStageData);
 
         $this->assertSame($serializeStageData, ($this->collectionResolverFactory)($resourceClass, $rootClass, $operation)($source, $args, null, $info));
+    }
+
+    /**
+     * @dataProvider resolveAndPaginationInfoProvider
+     */
+    public function testResolveAndPaginationInfo(bool $paginationClientPartialEnabled, bool $paginationInfoRequested, ?bool $shouldPaginationBePartial): void
+    {
+        $resourceClass = \stdClass::class;
+        $rootClass = 'rootClass';
+        $operationName = 'collection_query';
+        $operation = (new QueryCollection())->withName($operationName)->withPaginationClientPartial($paginationClientPartialEnabled);
+        $source = ['testField' => 0];
+        $args = ['args'];
+        $infoProphecy = $this->prophesize(ResolveInfo::class);
+        $resolveInfoFields = ['testField' => true];
+        if ($paginationInfoRequested) {
+            $resolveInfoFields['paginationInfo'] = true;
+        }
+        $infoProphecy->getFieldSelection()->willReturn($resolveInfoFields);
+        $info = $infoProphecy->reveal();
+        $info->fieldName = 'testField';
+        $resolverContext = ['source' => $source, 'args' => $args, 'info' => $info, 'is_collection' => true, 'is_mutation' => false, 'is_subscription' => false];
+
+        $readStageCollection = [new \stdClass()];
+        $this->readStageProphecy->__invoke($resourceClass, $rootClass, Argument::type($operation::class), $resolverContext)->shouldBeCalled()->willReturn($readStageCollection);
+
+        $serializeStageData = ['serialized'];
+        $this->serializeStageProphecy->__invoke($readStageCollection, $resourceClass, Argument::that(function ($operation) use ($shouldPaginationBePartial) {
+            return $operation->getPaginationPartial() === $shouldPaginationBePartial;
+        }), $resolverContext)->shouldBeCalled()->willReturn($serializeStageData);
+
+        $this->assertSame($serializeStageData, ($this->collectionResolverFactory)($resourceClass, $rootClass, $operation)($source, $args, null, $info));
+    }
+
+    public static function resolveAndPaginationInfoProvider(): iterable
+    {
+        yield 'paginationClientPartial disabled - paginationInfo requested' => [false, true, null];
+        yield 'paginationClientPartial enabled - paginationInfo requested' => [true, true, null];
+        yield 'paginationClientPartial disabled - paginationInfo not requested' => [false, false, null];
+        yield 'paginationClientPartial enabled - paginationInfo not requested' => [true, false, true];
     }
 }
