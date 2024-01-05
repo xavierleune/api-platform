@@ -87,7 +87,7 @@ final class SerializeStage implements SerializeStageInterface
             } else {
                 $data = 'cursor' === $this->pagination->getGraphQlPaginationType($operation) ?
                     $this->serializeCursorBasedPaginatedCollection($itemOrCollection, $normalizationContext, $context) :
-                    $this->serializePageBasedPaginatedCollection($itemOrCollection, $normalizationContext);
+                    $this->serializePageBasedPaginatedCollection($itemOrCollection, $normalizationContext, $context);
             }
         }
 
@@ -172,22 +172,33 @@ final class SerializeStage implements SerializeStageInterface
     /**
      * @throws \LogicException
      */
-    private function serializePageBasedPaginatedCollection(iterable $collection, array $normalizationContext): array
+    private function serializePageBasedPaginatedCollection(iterable $collection, array $normalizationContext, array $context): array
     {
-        if (!($collection instanceof PartialPaginatorInterface)) {
-            throw new \LogicException(sprintf('Collection returned by the collection data provider must implement %s or %s.', PaginatorInterface::class, PartialPaginatorInterface::class));
-        }
-
         $data = [
             'collection' => [],
-            'paginationInfo' => [
-                'itemsPerPage' => $collection->getItemsPerPage(),
-            ],
         ];
 
-        if ($collection instanceof PaginatorInterface) {
-            $data['paginationInfo']['totalCount'] = $collection->getTotalItems();
-            $data['paginationInfo']['lastPage'] = $collection->getLastPage();
+        $selection = $context['info']->getFieldSelection(1);
+        if (isset($selection['paginationInfo'])) {
+            $data['paginationInfo'] = [];
+            if (isset($selection['paginationInfo']['itemsPerPage'])) {
+                if (!($collection instanceof PartialPaginatorInterface)) {
+                    throw new \LogicException(sprintf('Collection returned by the collection data provider must implement %s to return itemsPerPage field.', PartialPaginatorInterface::class));
+                }
+                $data['paginationInfo']['itemsPerPage'] = $collection->getItemsPerPage();
+            }
+            if (isset($selection['paginationInfo']['lastPage'])) {
+                if (!($collection instanceof PaginatorInterface)) {
+                    throw new \LogicException(sprintf('Collection returned by the collection data provider must implement %s to return lastPage field.', PaginatorInterface::class));
+                }
+                $data['paginationInfo']['lastPage'] = $collection->getLastPage();
+            }
+            if (isset($selection['paginationInfo']['totalCount'])) {
+                if (!($collection instanceof PaginatorInterface)) {
+                    throw new \LogicException(sprintf('Collection returned by the collection data provider must implement %s to return totalCount field.', PaginatorInterface::class));
+                }
+                $data['paginationInfo']['totalCount'] = $collection->getTotalItems();
+            }
         }
 
         foreach ($collection as $object) {
