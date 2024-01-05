@@ -200,6 +200,12 @@ final class SerializeStage implements SerializeStageInterface
                 }
                 $data['paginationInfo']['totalCount'] = $collection->getTotalItems();
             }
+            if (isset($selection['paginationInfo']['hasNextPage'])) {
+                if (!($collection instanceof HasNextPagePaginatorInterface)) {
+                    throw new \LogicException(sprintf('Collection returned by the collection data provider must implement %s to return hasNextPage field.', HasNextPagePaginatorInterface::class));
+                }
+                $data['paginationInfo']['hasNextPage'] = $collection->hasNextPage();
+            }
         }
 
         foreach ($collection as $object) {
