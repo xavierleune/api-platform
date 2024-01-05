@@ -846,6 +846,7 @@ Feature: GraphQL collection support
           itemsPerPage
           lastPage
           totalCount
+          hasNextPage
         }
       }
     }

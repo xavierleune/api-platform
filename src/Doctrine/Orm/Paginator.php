@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace ApiPlatform\Doctrine\Orm;
 
+use ApiPlatform\State\Pagination\HasNextPagePaginatorInterface;
 use ApiPlatform\State\Pagination\PaginatorInterface;
 use Doctrine\ORM\Query;
 
@@ -21,7 +22,7 @@ use Doctrine\ORM\Query;
  *
  * @author Kévin Dunglas <dunglas@gmail.com>
  */
-final class Paginator extends AbstractPaginator implements PaginatorInterface, QueryAwareInterface
+final class Paginator extends AbstractPaginator implements PaginatorInterface, QueryAwareInterface, HasNextPagePaginatorInterface
 {
     private ?int $totalItems = null;
 
@@ -51,5 +52,25 @@ final class Paginator extends AbstractPaginator implements PaginatorInterface, Q
     public function getQuery(): Query
     {
         return $this->paginator->getQuery();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function hasNextPage(): bool
+    {
+
+        return false;
+        $query = clone $this->paginator->getQuery();
+        $result =
+        $query
+            ->setFirstResult(
+                $query->getFirstResult() + $query->getMaxResults()
+            )
+            ->setMaxResults(1)
+            ->getResult(Query::HYDRATE_ARRAY)
+        ;
+        file_put_contents("/home/xleune/Workspace/api-platform/debug.txt", print_r($result, true));die;
+        return true;
     }
 }
